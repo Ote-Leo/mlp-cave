@@ -1,0 +1,15 @@
+[project]
+name = "mlp-cave"
+version = "0.1.0"
+description = "Experimenting with Multi-Layer Perceptrons (MLPs) for educational purposes"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "numpy>=2.3.4",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.2",
+]
