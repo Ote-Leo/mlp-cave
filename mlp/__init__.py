@@ -71,7 +71,12 @@ class LayerDescriptor:
 Weights = NDArray
 Biases = NDArray
 LearningRate = np.float64
-Layer = tuple[Weights, Biases, LearningRate, ActivationFunction]
+@dataclass
+class Layer:
+    weights: Weights
+    biases: Biases
+    learning_rate: LearningRate
+    activation_function: ActivationFunction
 
 
 class Network:
@@ -89,7 +94,7 @@ class Network:
         for prev_desc, next_desc in zip(descs, descs[1:]):
             weights = random_array((next_desc.size, prev_desc.size))
             biases = random_array(next_desc.size)
-            layer = (
+            layer = Layer(
                 weights,
                 biases,
                 np.float64(next_desc.learning_rate),
@@ -99,17 +104,17 @@ class Network:
 
     @property
     def shape(self) -> tuple[int, ...]:
-        s = [self.layers[0][0].shape[1]]
+        s = [self.layers[0].weights.shape[1]]
         for layer in self.layers:
-            cur_shape, _ = layer[0].shape
+            cur_shape, _ = layer.weights.shape
             s.append(cur_shape)
         return tuple(s)
 
     def forward(self, input_data: NDArray) -> NDArray:
         acc = input_data
-        for weights, biases, _, activation_function in self.layers:
-            mult = weights @ acc.T + biases
-            acc = activation_function(mult)
+        for layer in self.layers:
+            mult = layer.weights @ acc.T + layer.biases
+            acc = layer.activation_function(mult)
         return acc
 
     def forward_train(
@@ -127,11 +132,11 @@ class Network:
         derive_activation = []
 
         acc = input_data
-        for weights, biases, _, activation_function in self.layers:
-            mult = weights @ acc.T + biases
-            acc = activation_function(mult)
+        for layer in self.layers:
+            mult = layer.weights @ acc.T + layer.biases
+            acc = layer.activation_function(mult)
             outs.append(acc)
-            derive_activation.append(activation_function.derivative(mult))
+            derive_activation.append(layer.activation_function.derivative(mult))
 
         return outs, derive_activation
 
@@ -141,34 +146,33 @@ class Network:
         expected: NDArray,
     ):
         new_layers = [
-            [np.copy(weights), np.copy(biases)] for weights, biases, *_ in self.layers
+            [np.copy(layer.weights), np.copy(layer.biases)] for layer in self.layers
         ]
         outs, derive_activation = self.forward_train(input_data)
 
         # Output layer
-        output_weights, _, learning_rate, *_ = self.layers[-1]
+        output_layer = self.layers[-1]
         diff_output = expected - outs[-1]
         delta_output = diff_output * derive_activation[-1]
-        delta = (delta_output.reshape(-1, 1) * output_weights).sum(axis=0)
-        new_layers[-1][0] += learning_rate * (delta_output[:, None] * outs[-2][None, :])
-        new_layers[-1][1] += learning_rate * delta_output
+        delta = (delta_output.reshape(-1, 1) * output_layer.weights).sum(axis=0)
+        new_layers[-1][0] += output_layer.learning_rate * (delta_output[:, None] * outs[-2][None, :])
+        new_layers[-1][1] += output_layer.learning_rate * delta_output
 
         # Hidden layers
         hidden_layers = zip(reversed(self.layers[:-1]), reversed(outs[:-2]))
         for i, (layer, layer_input) in enumerate(hidden_layers, start=2):
-            weights, _, learning_rate, *_ = layer
             current_delta = np.copy(delta)
-            delta = (current_delta.reshape(-1, 1) * weights).sum(axis=0)
-            new_layers[-i][0] += learning_rate * (
+            delta = (current_delta.reshape(-1, 1) * layer.weights).sum(axis=0)
+            new_layers[-1 * i][0] += layer.learning_rate * (
                 current_delta[:, None] * layer_input[None, :]
             )
-            new_layers[-i][1] += learning_rate * current_delta
+            new_layers[-1 * i][1] += layer.learning_rate * current_delta
 
         # Update weights and biases
         for i, (layer, new_weights) in enumerate(zip(self.layers, new_layers)):
-            _, _, learning_rate, activation_function = layer
             weights, biases = new_weights
-            self.layers[i] = (weights, biases, learning_rate, activation_function)
+            layer.weights = weights
+            layer.biases = biases
 
 
 InputData = NDArray
