@@ -1,4 +1,5 @@
 import itertools
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -9,6 +10,7 @@ try:
 except ImportError:
     from typing import Sequence
 
+LOGGER = logging.getLogger(__name__)
 
 def random_array(
     shape: int | tuple[int, ...],
@@ -92,6 +94,7 @@ class Network:
         seed: float | None = None,
     ):
         if seed is not None:
+            LOGGER.debug(f"Setting random seed to {seed}")
             np.random.seed(seed)
 
         self.layers: list[Layer] = []
@@ -112,6 +115,16 @@ class Network:
             )
             self.layers.append(layer)
 
+
+        for i, layer in enumerate(self.layers):
+            weights = layer.weights
+            biases = layer.biases
+            LOGGER.info(
+                f"Layer {i} initialized | "
+                f"weights shape={weights.shape} biases shape={biases.shape}"
+            )
+            LOGGER.debug(f"Weight min={weights.min():.2f}, max={biases.max():.2f}")
+
     @property
     def shape(self) -> tuple[int, ...]:
         s = [self.layers[0].weights.shape[1]]
@@ -122,7 +135,16 @@ class Network:
 
     def forward(self, input_data: NDArray) -> NDArray:
         acc = input_data
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
+            LOGGER.debug(
+                f"Layer {i} forward | "
+                f"input shape={acc.shape} | "
+                f"weights shape={layer.weights.shape} | "
+                f"biases shape={layer.biases.shape}"
+            )
+            expected_out_shape = (layer.weights.shape[0], acc.shape[1])
+            LOGGER.debug(f"Expected output shape={expected_out_shape}")
+
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
         return acc
@@ -142,7 +164,16 @@ class Network:
         derive_activation = []
 
         acc = input_data
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
+            LOGGER.debug(
+                f"Layer {i} forward | "
+                f"input shape={acc.shape} | "
+                f"weights shape={layer.weights.shape} | "
+                f"biases shape={layer.biases.shape}"
+            )
+            expected_out_shape = (layer.weights.shape[0], acc.shape[1])
+            LOGGER.debug(f"Expected output shape={expected_out_shape}")
+
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
             outs.append(acc)
@@ -210,6 +241,9 @@ def train(
     batch: Batch,
     iteration_count: int | None = None,
     error_threshold: float = DEAFULT_ERROR_THRESHOLD,
+
+    verbose: bool = True,
+    report_every: int = 100,
 ):
     import math
 
@@ -221,9 +255,12 @@ def train(
         if iteration_count is not None:
             if count >= iteration_count:
                 break
-            count += 1
         elif err < error_threshold:
             break
+
+        if verbose and count % report_every == 0:
+            LOGGER.info(f"Step {count:6d} | Loss = {err:.06f}")
+        count += 1
 
         input_data, expected_output = next(batches)
         network.train_pattern(input_data, expected_output)
