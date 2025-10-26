@@ -12,6 +12,7 @@ except ImportError:
 
 LOGGER = logging.getLogger(__name__)
 
+
 def random_array(
     shape: int | tuple[int, ...],
     max: float = 2.0,
@@ -115,7 +116,6 @@ class Network:
             )
             self.layers.append(layer)
 
-
         for i, layer in enumerate(self.layers):
             weights = layer.weights
             biases = layer.biases
@@ -142,8 +142,6 @@ class Network:
                 f"weights shape={layer.weights.shape} | "
                 f"biases shape={layer.biases.shape}"
             )
-            expected_out_shape = (layer.weights.shape[0], acc.shape[1])
-            LOGGER.debug(f"Expected output shape={expected_out_shape}")
 
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
@@ -171,8 +169,6 @@ class Network:
                 f"weights shape={layer.weights.shape} | "
                 f"biases shape={layer.biases.shape}"
             )
-            expected_out_shape = (layer.weights.shape[0], acc.shape[1])
-            LOGGER.debug(f"Expected output shape={expected_out_shape}")
 
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
@@ -186,34 +182,23 @@ class Network:
         input_data: NDArray,
         expected: NDArray,
     ):
-        new_layers = [
-            [np.copy(layer.weights), np.copy(layer.biases)] for layer in self.layers
-        ]
         activations, derivs = self.forward_train(input_data)
+        deltas = []
 
-        # Output layer
-        output_layer = self.layers[-1]
-        diff_output = expected - activations[-1]
-        delta = diff_output * derivs[-1]
+        # Output layer delta
+        error = expected - activations[-1]
+        deltas.append(error * derivs[-1])
 
-        new_layers[-1][0] += output_layer.learning_rate * (
-            delta[:, None] @ activations[-2][None, :]
-        )
-        new_layers[-1][1] += output_layer.learning_rate * delta
+        # Hidden layer deltas
+        for layer, deriv in zip(reversed(self.layers), reversed(derivs[:-1])):
+            deltas.append((layer.weights.T @ deltas[-1]) * deriv.ravel())
 
-        # Hidden layers
-        for l in range(len(self.layers) - 2, -1, -1):
-            layer = self.layers[l]
-            next_layer = self.layers[l + 1]
-            delta = (next_layer.weights.T @ delta) * derivs[l].ravel()
-            new_layers[l][0] += layer.learning_rate * (
-                delta[:, None] * activations[l][None, :]
+        # Update weights and biases
+        for delta, layer, activation in zip(reversed(deltas), self.layers, activations):
+            layer.weights += layer.learning_rate * (
+                delta[:, None] * activation[None, :]
             )
-            new_layers[l][1] += layer.learning_rate * delta
-
-        for layer, (weights, biases) in zip(self.layers, new_layers):
-            layer.weights = weights
-            layer.biases = biases
+            layer.biases += layer.learning_rate * delta
 
 
 InputData = NDArray
@@ -241,7 +226,6 @@ def train(
     batch: Batch,
     iteration_count: int | None = None,
     error_threshold: float = DEAFULT_ERROR_THRESHOLD,
-
     verbose: bool = True,
     report_every: int = 100,
 ):
