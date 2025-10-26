@@ -18,7 +18,7 @@ def random_array(
     return np.random.uniform(min, max, shape).astype(np.float64)
 
 
-DEFAULT_LEARNING_RATE: float = 1e-3
+DEFAULT_LEARNING_RATE: float = 1e-1
 
 
 class ActivationFunction:
@@ -71,6 +71,8 @@ class LayerDescriptor:
 Weights = NDArray
 Biases = NDArray
 LearningRate = np.float64
+
+
 @dataclass
 class Layer:
     weights: Weights
@@ -153,24 +155,24 @@ class Network:
         # Output layer
         output_layer = self.layers[-1]
         diff_output = expected - outs[-1]
-        delta_output = diff_output * derive_activation[-1]
-        delta = (delta_output.reshape(-1, 1) * output_layer.weights).sum(axis=0)
-        new_layers[-1][0] += output_layer.learning_rate * (delta_output[:, None] * outs[-2][None, :])
-        new_layers[-1][1] += output_layer.learning_rate * delta_output
+        delta = diff_output * derive_activation[-1]
+
+        new_layers[-1][0] += output_layer.learning_rate * (
+            delta[:, None] @ outs[-2][None, :]
+        )
+        new_layers[-1][1] += output_layer.learning_rate * delta
 
         # Hidden layers
-        hidden_layers = zip(reversed(self.layers[:-1]), reversed(outs[:-2]))
-        for i, (layer, layer_input) in enumerate(hidden_layers, start=2):
-            current_delta = np.copy(delta)
-            delta = (current_delta.reshape(-1, 1) * layer.weights).sum(axis=0)
-            new_layers[-1 * i][0] += layer.learning_rate * (
-                current_delta[:, None] * layer_input[None, :]
+        for l in range(len(self.layers) - 2, -1, -1):
+            layer = self.layers[l]
+            next_layer = self.layers[l + 1]
+            delta = (next_layer.weights.T @ delta) * derive_activation[l].ravel()
+            new_layers[l][0] += layer.learning_rate * (
+                delta[:, None] * outs[l][None, :]
             )
-            new_layers[-1 * i][1] += layer.learning_rate * current_delta
+            new_layers[l][1] += layer.learning_rate * delta
 
-        # Update weights and biases
-        for i, (layer, new_weights) in enumerate(zip(self.layers, new_layers)):
-            weights, biases = new_weights
+        for layer, (weights, biases) in zip(self.layers, new_layers):
             layer.weights = weights
             layer.biases = biases
 
@@ -188,7 +190,7 @@ def loss(
     for input_data, expected_output in batch:
         res = network.forward(input_data)
         diff = expected_output - res
-        total_err = (diff * diff).sum()
+        total_err += (diff * diff).sum()
     return np.float64(0.5) * total_err
 
 
