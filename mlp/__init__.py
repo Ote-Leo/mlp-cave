@@ -31,7 +31,11 @@ class ActivationFunction:
 
 class Sigmoid(ActivationFunction):
     def __call__(self, arr: NDArray) -> NDArray:
-        return 1 / (1 + np.exp(-arr))
+        return np.where(
+            arr >= 0,
+            1 / (1 + np.exp(-arr)),
+            np.exp(arr) / (1 + np.exp(arr)),  # avoiding overflow large negative numbers
+        )
 
     def derivative(self, arr: NDArray) -> NDArray:
         return self(arr) * (1 - self(arr))
@@ -85,7 +89,11 @@ class Network:
     def __init__(
         self,
         description: Sequence[int | LayerDescriptor],
+        seed: float | None = None,
     ):
+        if seed is not None:
+            np.random.seed(seed)
+
         self.layers: list[Layer] = []
 
         descs = tuple(
@@ -150,15 +158,15 @@ class Network:
         new_layers = [
             [np.copy(layer.weights), np.copy(layer.biases)] for layer in self.layers
         ]
-        outs, derive_activation = self.forward_train(input_data)
+        activations, derivs = self.forward_train(input_data)
 
         # Output layer
         output_layer = self.layers[-1]
-        diff_output = expected - outs[-1]
-        delta = diff_output * derive_activation[-1]
+        diff_output = expected - activations[-1]
+        delta = diff_output * derivs[-1]
 
         new_layers[-1][0] += output_layer.learning_rate * (
-            delta[:, None] @ outs[-2][None, :]
+            delta[:, None] @ activations[-2][None, :]
         )
         new_layers[-1][1] += output_layer.learning_rate * delta
 
@@ -166,9 +174,9 @@ class Network:
         for l in range(len(self.layers) - 2, -1, -1):
             layer = self.layers[l]
             next_layer = self.layers[l + 1]
-            delta = (next_layer.weights.T @ delta) * derive_activation[l].ravel()
+            delta = (next_layer.weights.T @ delta) * derivs[l].ravel()
             new_layers[l][0] += layer.learning_rate * (
-                delta[:, None] * outs[l][None, :]
+                delta[:, None] * activations[l][None, :]
             )
             new_layers[l][1] += layer.learning_rate * delta
 
