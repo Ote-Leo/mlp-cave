@@ -6,9 +6,13 @@ Sigmoid, Tanh, ReLU, and Identity. It supports training with
 pattern-by-pattern backpropagation and calculates the mean squared error loss.
 """
 
+import io
 import itertools
 import logging
+import struct
+import zlib
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -150,6 +154,12 @@ ExpectedOutput = NDArray
 Batch = Sequence[tuple[InputData, ExpectedOutput]]
 
 
+HEADER_SIGNATURE: bytes = b"MLPN"  # MLP Network
+VERSION: bytes = (1).to_bytes(1, "little")
+COMPRESSED: bytes = (1).to_bytes(1, "little")
+UNCOMPRESSED: bytes = (0).to_bytes(1, "little")
+
+
 class Network:
     """Multi-Layer Perceptron (MLP) neural network."""
 
@@ -274,6 +284,144 @@ class Network:
                 delta[:, None] * activation[None, :]
             )
             layer.biases += layer.learning_rate * delta
+
+    def _dump(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
+        data_list = []
+        shapes = []
+        act_names = []
+        learning_rates = []
+
+        for layer in self.layers:
+            data_list.append(layer.weights.ravel())
+            data_list.append(layer.biases.ravel())
+            shapes.append(layer.weights.shape)
+            act_names.append(layer.activation_function.__class__.__name__)
+            learning_rates.append(layer.learning_rate)
+
+        all_data = np.concatenate(data_list)
+        shapes_arr = np.array(shapes, dtype=np.int32).flatten()
+        act_names_arr = np.array(act_names, dtype="S")
+        learning_rates_arr = np.array(learning_rates, dtype=np.float64)
+
+        return all_data, shapes_arr, act_names_arr, learning_rates_arr
+
+    def _dumps(self) -> bytes:
+        f = io.BytesIO()
+        all_data, shapes_arr, act_names_arr, learning_rates_arr = self._dump()
+        np.savez(
+            f,
+            data=all_data,
+            shapes=shapes_arr,
+            act_names=act_names_arr,
+            learning_rates=learning_rates_arr,
+            allow_pickle=False,
+        )
+        return f.getvalue()
+
+    def dumps(self, compress: bool = True) -> bytes:
+        """Serialize network to bytes."""
+        data = self._dumps()
+
+        header = HEADER_SIGNATURE + VERSION
+        if compress:
+            LOGGER.info("zlib compressing Network serialization")
+            data = zlib.compress(data)
+            header += COMPRESSED
+        else:
+            header += UNCOMPRESSED
+        data = header + data
+
+        crc = zlib.crc32(data) & 0xFFFF_FFFF
+        checksum = struct.pack(">I", crc)
+
+        return data + checksum
+
+    def dump(self, path: str | Path, compress: bool = True):
+        """Save network to file."""
+        data = self.dumps(compress=compress)
+        path = Path(path)
+        path.write_bytes(data)
+
+    @classmethod
+    def _load(
+        cls,
+        all_data: NDArray,
+        shapes_arr: NDArray,
+        act_names_arr: NDArray,
+        learning_rates_arr: NDArray,
+    ):
+        shapes = shapes_arr.reshape(-1, 2)
+        act_names = [name.tobytes().decode("utf-8") for name in act_names_arr]
+        layers = []
+        offset = 0
+
+        for shape, act_name, lr in zip(shapes, act_names, learning_rates_arr):
+            w_size = shape[0] * shape[1]
+            b_size = shape[0]
+            w = all_data[offset : offset + w_size].reshape(shape)
+            offset += w_size
+            b = all_data[offset : offset + b_size]
+            offset += b_size
+            act = {
+                "Sigmoid": Sigmoid,
+                "Tanh": Tanh,
+                "ReLU": ReLU,
+                "Identity": Identity,
+            }[act_name]()
+            layers.append(Layer(w, b, lr, act))
+
+        net = cls([shape[1] for shape in shapes] + [shapes[-1][0]])
+        net.layers = layers
+        return net
+
+    @classmethod
+    def _loads(cls, raw: bytes) -> "Network":
+        with io.BytesIO(raw) as f:
+            npz = np.load(f)
+            data = npz["data"]
+            shapes = npz["shapes"]
+            act_names = npz["act_names"]
+            learning_rates = npz["learning_rates"]
+        return cls._load(data, shapes, act_names, learning_rates)
+
+    @classmethod
+    def loads(cls, data_bytes: bytes) -> "Network":
+        """Deserialize network from bytes."""
+        LOGGER.debug("Checking header signature")
+        if not data_bytes.startswith(HEADER_SIGNATURE):
+            raise ValueError("Invalid file header")
+
+        LOGGER.debug("Checking CRC32 Checksum")
+        payload, checksum_bytes = data_bytes[:-4], data_bytes[-4:]
+        given_checksum = struct.unpack(">I", checksum_bytes)[0]
+        computed_checksum = zlib.crc32(payload) & 0xFFFF_FFFF
+        if given_checksum != computed_checksum:
+            raise ValueError(
+                f"Checksum mismatch: expected {given_checksum:#x}, "
+                f"computed {computed_checksum:#x}. Corrupted or incomplete file"
+            )
+
+        LOGGER.debug("Checking header version")
+        version = data_bytes[len(HEADER_SIGNATURE)]
+        if version != VERSION[0]:
+            raise ValueError(f"Unsupported version {version}")
+
+        LOGGER.debug("Checking compression flag")
+        compression_flag = data_bytes[len(HEADER_SIGNATURE) + 1]
+        data = data_bytes[len(HEADER_SIGNATURE) + 2 : -4]
+        if compression_flag == COMPRESSED[0]:
+            LOGGER.info("zlib decompressing data")
+            data = zlib.decompress(data)
+        elif compression_flag != UNCOMPRESSED[0]:
+            raise ValueError(f"Unknown compression flag {compression_flag!r}")
+
+        return Network._loads(data)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Network":
+        """Load network from file."""
+        raw_data = Path(path).read_bytes()
+        return cls.loads(raw_data)
 
 
 def loss(
