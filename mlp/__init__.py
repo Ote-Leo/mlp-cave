@@ -1,3 +1,11 @@
+"""Minimal feedforward neural network with backpropagation using NumPy.
+
+This module implements a simple fully connected neural network (multi-layer
+perceptron) with support for different activation functions, including
+Sigmoid, Tanh, ReLU, and Identity. It supports training with
+pattern-by-pattern backpropagation and calculates the mean squared error loss.
+"""
+
 import itertools
 import logging
 from dataclasses import dataclass
@@ -18,6 +26,16 @@ def random_array(
     max: float = 2.0,
     min: float = -2.0,
 ) -> NDArray[np.float64]:
+    """Generate a NumPy array of given shape with uniform random values between min and max.
+
+    Args:
+        shape: Desired shape of the array.
+        max: Maximum value (inclusive).
+        min: Minimum value (inclusive).
+
+    Returns:
+        Array filled with uniform random values in [min, max].
+    """
     return np.random.uniform(min, max, shape).astype(np.float64)
 
 
@@ -25,14 +43,24 @@ DEFAULT_LEARNING_RATE: float = 1e-1
 
 
 class ActivationFunction:
+    """Base class for activation functions."""
+
     def __call__(self, arr: NDArray) -> NDArray:
+        """Computes the activation function output for the input array."""
         raise NotImplementedError()
 
     def derivative(self, arr: NDArray) -> NDArray:
+        """Computes the derivative of the activation function for backpropagation."""
         raise NotImplementedError()
 
 
 class Sigmoid(ActivationFunction):
+    r"""Sigmoid activation function: :math:`f(x) = \frac{1}{1 + e^{-x}}`.
+
+    The derivative is :math:`f'(x) = f(x) \dot (1 - f(x))`.
+    Includes overflow protection for large negative values.
+    """
+
     def __call__(self, arr: NDArray) -> NDArray:
         return np.where(
             arr >= 0,
@@ -45,6 +73,11 @@ class Sigmoid(ActivationFunction):
 
 
 class Tanh(ActivationFunction):
+    r"""Hyperbolic tangent activation function: :math:`f(x) = \tanh{x}`.
+
+    The derivative is :math:`f'(x) = 1 - f(x)^2`.
+    """
+
     def __call__(self, arr: NDArray) -> NDArray:
         return np.tanh(arr)
 
@@ -53,6 +86,11 @@ class Tanh(ActivationFunction):
 
 
 class Identity(ActivationFunction):
+    """Identity (linear) activation function: :math:`f(x) = x`.
+
+    The derivative is :math:`f'(x) = 1`.
+    """
+
     def __call__(self, arr: NDArray) -> NDArray:
         return arr
 
@@ -61,6 +99,14 @@ class Identity(ActivationFunction):
 
 
 class ReLU(ActivationFunction):
+    r"""Rectified Linear Unit (ReLU) activation function: :math:`f(x) = \max(0, x)`.
+
+    The derivative is :math:`f'(n) = \begin{cases}
+    1 & \text{if } x > 0 \\
+    0 & \text{otherwise}
+    \end{cases}`
+    """
+
     def __call__(self, arr: NDArray) -> NDArray:
         return np.maximum(0, arr)
 
@@ -70,9 +116,14 @@ class ReLU(ActivationFunction):
 
 @dataclass
 class LayerDescriptor:
+    """Descriptor for a neural network layer (Layer)."""
+
     size: int
+    """Number of neurons in the layer."""
     learning_rate: float = DEFAULT_LEARNING_RATE
+    """Learning rate used for updating weights and biases."""
     activation_function: ActivationFunction = Sigmoid()
+    """Activation function used in the layer."""
 
 
 Weights = NDArray
@@ -82,18 +133,40 @@ LearningRate = np.float64
 
 @dataclass
 class Layer:
+    """Represents a fully connected layer in a neural network."""
+
     weights: Weights
+    """Weight matrix of shape (`next_layer_size`, `previous_layer_size`)."""
     biases: Biases
+    """Bias vector for the layer."""
     learning_rate: LearningRate
+    """Learning rate for weight and bias updates."""
     activation_function: ActivationFunction
+    """Activation function used for this layer."""
+
+
+InputData = NDArray
+ExpectedOutput = NDArray
+Batch = Sequence[tuple[InputData, ExpectedOutput]]
 
 
 class Network:
+    """Multi-Layer Perceptron (MLP) neural network."""
+
     def __init__(
         self,
         description: Sequence[int | LayerDescriptor],
         seed: float | None = None,
     ):
+        """Initialize a multi-layer perceptron network.
+
+        Args:
+            description: Layer sizes and descriptors to define the network architecture.
+            seed: An optional random seed for reproducible initialization.
+
+        Notes:
+            - Each layer is initialized with random weights and biases in the range [-2, 2].
+        """
         if seed is not None:
             LOGGER.debug(f"Setting random seed to {seed}")
             np.random.seed(seed)
@@ -127,13 +200,15 @@ class Network:
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """A tuple of layer sizes, including input and output layers."""
         s = [self.layers[0].weights.shape[1]]
         for layer in self.layers:
             cur_shape, _ = layer.weights.shape
             s.append(cur_shape)
         return tuple(s)
 
-    def forward(self, input_data: NDArray) -> NDArray:
+    def forward(self, input_data: InputData) -> NDArray:
+        """Computes forward pass through the network for given input."""
         acc = input_data
         for i, layer in enumerate(self.layers):
             LOGGER.debug(
@@ -149,17 +224,16 @@ class Network:
 
     def forward_train(
         self,
-        input_data: NDArray,
+        input_data: InputData,
     ) -> tuple[list[NDArray], list[NDArray]]:
-        r"""
-        Returns
-        -------
+        r"""Compute forward pass and return activations and derivatives for backpropagation.
 
-        - The intermediate output of each layer including the input layer :math:`\widetilde{out_k}`.
-        - The intermediate transfer function over the weighted summation :math:`f'(\text{net}_k)`
+        Returns:
+            activations: List of activations for each layer, including input.
+            derivs: List of derivatives of each layer’s weighted input.
         """
-        outs = [input_data]
-        derive_activation = []
+        activations = [input_data]
+        derivs = []
 
         acc = input_data
         for i, layer in enumerate(self.layers):
@@ -172,16 +246,17 @@ class Network:
 
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
-            outs.append(acc)
-            derive_activation.append(layer.activation_function.derivative(mult))
+            activations.append(acc)
+            derivs.append(layer.activation_function.derivative(mult))
 
-        return outs, derive_activation
+        return activations, derivs
 
     def train_pattern(
         self,
-        input_data: NDArray,
-        expected: NDArray,
+        input_data: InputData,
+        expected: ExpectedOutput,
     ):
+        """Performs a single pattern update using backpropagation."""
         activations, derivs = self.forward_train(input_data)
         deltas = []
 
@@ -201,15 +276,19 @@ class Network:
             layer.biases += layer.learning_rate * delta
 
 
-InputData = NDArray
-ExpectedOutput = NDArray
-Batch = Sequence[tuple[InputData, ExpectedOutput]]
-
-
 def loss(
     network: Network,
     batch: Batch,
 ) -> np.float64:
+    """Computes the total mean squared error over a batch of input-output pairs.
+
+    Args:
+        network: The neural network to evaluate.
+        batch: A sequence of (input, expected output) pairs.
+
+    Returns:
+        Total mean squared error of the network on the batch.
+    """
     total_err: np.float64 = np.float64(0)
     for input_data, expected_output in batch:
         res = network.forward(input_data)
@@ -218,17 +297,27 @@ def loss(
     return np.float64(0.5) * total_err
 
 
-DEAFULT_ERROR_THRESHOLD: float = 1e-3
+DEFAULT_ERROR_THRESHOLD: float = 1e-3
 
 
 def train(
     network: Network,
     batch: Batch,
     iteration_count: int | None = None,
-    error_threshold: float = DEAFULT_ERROR_THRESHOLD,
+    error_threshold: float = DEFAULT_ERROR_THRESHOLD,
     verbose: bool = True,
     report_every: int = 100,
 ):
+    """Train a neural network over a batch of patterns.
+
+    Args:
+        network: Neural network instance to train.
+        batch: A sequence of (input, expected output) training pairs.
+        iteration_count: Maximum number of training iterations. If None, training continues until error_threshold is reached.
+        error_threshold: Early stopping threshold for loss.
+        verbose: If True, log progress at regular intervals.
+        report_every: Interval of steps at which progress is logged.
+    """
     import math
 
     batches = itertools.cycle(batch)
