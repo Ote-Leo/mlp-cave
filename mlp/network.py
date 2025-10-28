@@ -20,8 +20,8 @@ from numpy.typing import NDArray
 from .types import (
     Batch,
     Biases,
-    ExpectedOutput,
-    InputData,
+    Labels,
+    Patterns,
     LearningRate,
     Weights,
 )
@@ -216,9 +216,9 @@ class Network:
             s.append(cur_shape)
         return tuple(s)
 
-    def forward(self, input_data: InputData) -> NDArray:
+    def forward(self, pattern: Patterns) -> NDArray:
         """Computes forward pass through the network for given input."""
-        acc = input_data
+        acc = pattern
         for i, layer in enumerate(self.layers):
             LOGGER.debug(
                 f"Layer {i} forward | "
@@ -233,7 +233,7 @@ class Network:
 
     def forward_train(
         self,
-        input_data: InputData,
+        pattern: Patterns,
     ) -> tuple[list[NDArray], list[NDArray]]:
         r"""Compute forward pass and return activations and derivatives for backpropagation.
 
@@ -241,10 +241,10 @@ class Network:
             activations: List of activations for each layer, including input.
             derivs: List of derivatives of each layer’s weighted input.
         """
-        activations = [input_data]
+        activations = [pattern]
         derivs = []
 
-        acc = input_data
+        acc = pattern
         for i, layer in enumerate(self.layers):
             LOGGER.debug(
                 f"Layer {i} forward | "
@@ -262,15 +262,15 @@ class Network:
 
     def train_pattern(
         self,
-        input_data: InputData,
-        expected: ExpectedOutput,
+        pattern: Patterns,
+        label: Labels,
     ):
         """Performs a single pattern update using backpropagation."""
-        activations, derivs = self.forward_train(input_data)
+        activations, derivs = self.forward_train(pattern)
         deltas = []
 
         # Output layer delta
-        error = expected - activations[-1]
+        error = label - activations[-1]
         deltas.append(error * derivs[-1])
 
         # Hidden layer deltas
@@ -436,12 +436,10 @@ def loss(
     Returns:
         Total mean squared error of the network on the batch.
     """
-    total_err: np.float64 = np.float64(0)
-    for input_data, expected_output in batch:
-        res = network.forward(input_data)
-        diff = expected_output - res
-        total_err += (diff * diff).sum()
-    return np.float64(0.5) * total_err
+    patterns, labels = batch
+    predictions = np.stack([ network.forward(pattern) for pattern in patterns ])
+    diff = labels - predictions
+    return 0.5 * np.sum(diff * diff)
 
 
 DEFAULT_ERROR_THRESHOLD: float = 1e-3
@@ -459,7 +457,7 @@ def train(
 
     Args:
         network: Neural network instance to train.
-        batch: A sequence of (input, expected output) training pairs.
+        batch: A tuple of (input, expected output) training pairs.
         iteration_count: Maximum number of training iterations. If None, training continues until error_threshold is reached.
         error_threshold: Early stopping threshold for loss.
         verbose: If True, log progress at regular intervals.
@@ -467,7 +465,16 @@ def train(
     """
     import math
 
-    batches = itertools.cycle(batch)
+    patterns, labels = batch
+    pattern_legnth, labels_length = len(patterns), len(labels)
+    if pattern_legnth != labels_length:
+        raise ValueError(
+            "length of patterns doesn't match length of the labels",
+            pattern_legnth, labels_length,
+        )
+    elif pattern_legnth == 0:
+        LOGGER.info("Skipping empty dataset")
+        return
 
     err = math.inf
     count = 0
@@ -480,8 +487,9 @@ def train(
 
         if verbose and count % report_every == 0:
             LOGGER.info(f"Step {count:6d} | Loss = {err:.06f}")
-        count += 1
+        idx = count % pattern_legnth
 
-        input_data, expected_output = next(batches)
-        network.train_pattern(input_data, expected_output)
+        pattern, label = patterns[idx], labels[idx]
+        network.train_pattern(pattern, label)
         err = loss(network, batch)
+        count += 1
