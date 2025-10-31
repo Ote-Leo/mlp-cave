@@ -7,7 +7,6 @@ pattern-by-pattern backpropagation and calculates the mean squared error loss.
 """
 
 import io
-import itertools
 import logging
 import struct
 import zlib
@@ -21,8 +20,8 @@ from .types import (
     Batch,
     Biases,
     Labels,
-    Patterns,
     LearningRate,
+    Patterns,
     Weights,
 )
 
@@ -62,7 +61,7 @@ class ActivationFunction:
         """Computes the activation function output for the input array."""
         raise NotImplementedError()
 
-    def derivative(self, arr: NDArray) -> NDArray:
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
         """Computes the derivative of the activation function for backpropagation."""
         raise NotImplementedError()
 
@@ -81,8 +80,8 @@ class Sigmoid(ActivationFunction):
             np.exp(arr) / (1 + np.exp(arr)),  # avoiding overflow large negative numbers
         )
 
-    def derivative(self, arr: NDArray) -> NDArray:
-        return self(arr) * (1 - self(arr))
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
+        return arr_activation * (1 - arr_activation)
 
 
 class Tanh(ActivationFunction):
@@ -94,8 +93,8 @@ class Tanh(ActivationFunction):
     def __call__(self, arr: NDArray) -> NDArray:
         return np.tanh(arr)
 
-    def derivative(self, arr: NDArray) -> NDArray:
-        return 1 - self(arr) ** 2
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
+        return 1 - arr_activation**2
 
 
 class Identity(ActivationFunction):
@@ -107,7 +106,7 @@ class Identity(ActivationFunction):
     def __call__(self, arr: NDArray) -> NDArray:
         return arr
 
-    def derivative(self, arr: NDArray) -> NDArray:
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
         return np.ones_like(arr)
 
 
@@ -123,7 +122,7 @@ class ReLU(ActivationFunction):
     def __call__(self, arr: NDArray) -> NDArray:
         return np.maximum(0, arr)
 
-    def derivative(self, arr: NDArray) -> NDArray:
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
         return (arr > 0).astype(np.float64)
 
 
@@ -239,7 +238,7 @@ class Network:
 
         Returns:
             activations: List of activations for each layer, including input.
-            derivs: List of derivatives of each layer’s weighted input.
+            derivs: List of derivatives of each layer's weighted input.
         """
         activations = [pattern]
         derivs = []
@@ -256,7 +255,7 @@ class Network:
             mult = layer.weights @ acc.T + layer.biases
             acc = layer.activation_function(mult)
             activations.append(acc)
-            derivs.append(layer.activation_function.derivative(mult))
+            derivs.append(layer.activation_function.derivative(mult, acc))
 
         return activations, derivs
 
@@ -437,7 +436,7 @@ def loss(
         Total mean squared error of the network on the batch.
     """
     patterns, labels = batch
-    predictions = np.stack([ network.forward(pattern) for pattern in patterns ])
+    predictions = np.stack([network.forward(pattern) for pattern in patterns])
     diff = labels - predictions
     return 0.5 * np.sum(diff * diff)
 
