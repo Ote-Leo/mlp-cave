@@ -13,6 +13,7 @@ from .network import (
     loss,
     random_array,
     train,
+    train_batched,
 )
 
 __all__ = (
@@ -27,6 +28,6 @@ __all__ = (
     "loss",
     "random_array",
     "train",
-    "DataLoader",
+    "train_batched",
     "load_mnist",
 )

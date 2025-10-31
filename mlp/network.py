@@ -508,3 +508,50 @@ def train(
         network.train_pattern(pattern, label)
         err = loss(network, batch)
         count += 1
+
+
+def train_batched(
+    network: Network,
+    inputs: NDArray[np.float64],
+    targets: NDArray[np.float64],
+    error_threshold: float = 1e-3,
+    verbose: bool = True,
+    report_every: int = 100,
+    batch_size: int = 32,
+):
+    import math
+
+    n_samples = len(inputs)
+
+    batch_count = n_samples // batch_size
+    LOGGER.info(f"number of batches {batch_count}")
+
+    count = 0
+    for start in range(0, n_samples, batch_size):
+        end = start + batch_size
+        batch_inputs = inputs[start:end]
+        batch_outputs = targets[start:end]
+
+        for pattern, output in zip(batch_inputs, batch_outputs):
+            network.train_pattern(pattern, output)
+
+        err = loss(network, (batch_inputs, batch_outputs))
+        if verbose and (count % report_every == 0 or count == 0):
+            LOGGER.info(f"Step {count:6d} | Loss = {err:.06f}")
+        count += 1
+
+    global_err = math.inf
+    while global_err > error_threshold:
+        idx = np.random.choice(n_samples, batch_size, replace=False)
+        batch_inputs = inputs[idx]
+        batch_outputs = targets[idx]
+
+        for pattern, output in zip(batch_inputs, batch_outputs):
+            network.train_pattern(pattern, output)
+
+        global_err = loss(network, (batch_inputs, batch_outputs))
+        if verbose and (count % report_every == 0):
+            LOGGER.info(f"Fine-tune step {count:6d} | Loss = {global_err:.06f}")
+        count += 1
+
+    LOGGER.info(f"Training finished | Final loss = {global_err:.06f} | Steps = {count}")
