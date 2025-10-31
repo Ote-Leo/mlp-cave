@@ -126,6 +126,21 @@ class ReLU(ActivationFunction):
         return (arr > 0).astype(np.float64)
 
 
+class LeakyReLU(ActivationFunction):
+    """Leaky ReLU activation function."""
+
+    def __init__(self, alpha: float = 0.01):
+        self.alpha = np.float64(alpha)
+
+    def __call__(self, arr: NDArray) -> NDArray:
+        """Forward activation."""
+        return np.where(arr > 0, arr, self.alpha * arr)
+
+    def derivative(self, arr: NDArray, arr_activation: NDArray) -> NDArray:
+        """Derivative for backpropagation."""
+        return np.where(arr > 0, 1.0, self.alpha)
+
+
 @dataclass
 class LayerDescriptor:
     """Descriptor for a neural network layer (Layer)."""
@@ -365,6 +380,7 @@ class Network:
                 "Tanh": Tanh,
                 "ReLU": ReLU,
                 "Identity": Identity,
+                "LeakyReLU": LeakyReLU,
             }[act_name]()
             layers.append(Layer(w, b, lr, act))
 
