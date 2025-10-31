@@ -46,22 +46,20 @@ def load_mnist(
     """
     Load MNIST dataset from `root` directory.
 
-    Parameters
-    ----------
-    root : str | Path
-        Directory containing MNIST files
-        (e.g. train-images-idx3-ubyte[.gz], train-labels-idx1-ubyte[.gz]).
-    train : bool, default=True
-        Whether to load training or test split.
-    one_hot : bool, default=True
-        Whether to one-hot encode the labels.
+    Args:
+        root:
+            Directory containing MNIST files
+            (e.g. train-images-idx3-ubyte[.gz], train-labels-idx1-ubyte[.gz]).
+        train:
+            Whether to load training or test split.
+        one_hot:
+            Whether to one-hot encode the labels.
 
     Returns
-    -------
-    images : (N, 784) float64 ndarray
-        Normalized image data in [0, 1].
-    labels : (N,) or (N, 10) float64 ndarray
-        Labels, one-hot encoded if requested.
+        images : (N, 784) float64 ndarray
+            Normalized image data in [0, 1].
+        labels : (N,) or (N, 10) float64 ndarray
+            Labels, one-hot encoded if requested.
     """
     root = Path(root)
     prefix = "train" if train else "t10k"
