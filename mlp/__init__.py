@@ -1,6 +1,5 @@
 from .loaders import (
-    DataLoader,
-    MnistLoader,
+    load_mnist,
 )
 from .network import (
     ActivationFunction,
@@ -29,5 +28,5 @@ __all__ = (
     "random_array",
     "train",
     "DataLoader",
-    "MnistLoader",
+    "load_mnist",
 )
