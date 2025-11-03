@@ -10,5 +10,3 @@ LearningRate: TypeAlias = np.float64
 Patterns: TypeAlias = NDArray
 """A 2-D NumPy array of shape (N, input_dim)."""
 Labels: TypeAlias = NDArray
-"""A 2-D NumPy array of shape (N, output_dim)."""
-Batch: TypeAlias = tuple[Patterns, Labels]

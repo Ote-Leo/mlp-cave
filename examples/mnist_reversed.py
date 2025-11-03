@@ -68,7 +68,7 @@ while err > learning_rates[1][1]:
 
     pattern, label = data[idx], labels[idx]
     network.train_pattern(pattern, label)
-    err = mlp.loss(network, (data, labels))
+    err = mlp.loss(network, data, labels)
     if count > 0 and count % 10_000 == 0:
         logging.info("saving a backup to 'mnist-reversed.backup.mlp'")
         network.dump("mnist-reversed.backup.mlp")

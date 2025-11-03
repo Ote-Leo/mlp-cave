@@ -17,7 +17,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .types import (
-    Batch,
     Biases,
     Labels,
     LearningRate,
@@ -440,21 +439,22 @@ class Network:
 
 def loss(
     network: Network,
-    batch: Batch,
+    patterns: Patterns,
+    labels: Labels,
 ) -> np.float64:
     """Computes the total mean squared error over a batch of input-output pairs.
 
     Args:
         network: The neural network to evaluate.
-        batch: A sequence of (input, expected output) pairs.
+        patterns: The input training data.
+        labels: The expected outputs of the samples.
 
     Returns:
         Total mean squared error of the network on the batch.
     """
-    patterns, labels = batch
-    predictions = np.stack([network.forward(pattern) for pattern in patterns])
+    predictions = np.stack([network.forward(input) for input in patterns])
     diff = labels - predictions
-    return 0.5 * np.sum(diff * diff)
+    return np.float64(0.5) * np.sum(diff * diff)
 
 
 DEFAULT_ERROR_THRESHOLD: float = 1e-3
@@ -462,7 +462,8 @@ DEFAULT_ERROR_THRESHOLD: float = 1e-3
 
 def train(
     network: Network,
-    batch: Batch,
+    patterns: Patterns,
+    labels: Labels,
     iteration_count: int | None = None,
     error_threshold: float = DEFAULT_ERROR_THRESHOLD,
     verbose: bool = True,
@@ -472,7 +473,8 @@ def train(
 
     Args:
         network: Neural network instance to train.
-        batch: A tuple of (input, expected output) training pairs.
+        patterns: The input training data.
+        labels: The expected outputs of the samples.
         iteration_count: Maximum number of training iterations. If None, training continues until error_threshold is reached.
         error_threshold: Early stopping threshold for loss.
         verbose: If True, log progress at regular intervals.
@@ -480,7 +482,6 @@ def train(
     """
     import math
 
-    patterns, labels = batch
     pattern_legnth, labels_length = len(patterns), len(labels)
     if pattern_legnth != labels_length:
         raise ValueError(
@@ -507,14 +508,14 @@ def train(
 
         pattern, label = patterns[idx], labels[idx]
         network.train_pattern(pattern, label)
-        err = loss(network, batch)
+        err = loss(network, patterns, labels)
         count += 1
 
 
 def train_batched(
     network: Network,
-    inputs: NDArray[np.float64],
-    targets: NDArray[np.float64],
+    patterns: Patterns,
+    labels: Labels,
     error_threshold: float = 1e-3,
     verbose: bool = True,
     report_every: int = 100,
@@ -522,7 +523,7 @@ def train_batched(
 ):
     import math
 
-    n_samples = len(inputs)
+    n_samples = len(patterns)
 
     batch_count = n_samples // batch_size
     LOGGER.info(f"number of batches {batch_count}")
@@ -530,13 +531,13 @@ def train_batched(
     count = 0
     for start in range(0, n_samples, batch_size):
         end = start + batch_size
-        batch_inputs = inputs[start:end]
-        batch_outputs = targets[start:end]
+        batch_inputs = patterns[start:end]
+        batch_outputs = labels[start:end]
 
         for pattern, output in zip(batch_inputs, batch_outputs):
             network.train_pattern(pattern, output)
 
-        err = loss(network, (batch_inputs, batch_outputs))
+        err = loss(network, batch_inputs, batch_outputs)
         if verbose and (count % report_every == 0 or count == 0):
             LOGGER.info(f"Step {count:6d} | Loss = {err:.06f}")
         count += 1
@@ -544,13 +545,13 @@ def train_batched(
     global_err = math.inf
     while global_err > error_threshold:
         idx = np.random.choice(n_samples, batch_size, replace=False)
-        batch_inputs = inputs[idx]
-        batch_outputs = targets[idx]
+        batch_inputs = patterns[idx]
+        batch_outputs = labels[idx]
 
         for pattern, output in zip(batch_inputs, batch_outputs):
             network.train_pattern(pattern, output)
 
-        global_err = loss(network, (batch_inputs, batch_outputs))
+        global_err = loss(network, batch_inputs, batch_outputs)
         if verbose and (count % report_every == 0):
             LOGGER.info(f"Fine-tune step {count:6d} | Loss = {global_err:.06f}")
         count += 1
