@@ -1,0 +1,6 @@
+# WS25/26_TNN_Assignment_PA-A_data_File_No_2_PA-A_training_data_02.txt
+# P=4    N=2    M=1   
+0.0 0.0  -0.8 
+0.0 1.0  +0.8 
+1.0 0.0  +0.8 
+1.0 1.0  -0.8 
