@@ -1,5 +1,6 @@
 from .loaders import (
     load_mnist,
+    load_mnist_reversed,
 )
 from .network import (
     ActivationFunction,
@@ -32,4 +33,5 @@ __all__ = (
     "train",
     "train_batched",
     "load_mnist",
+    "load_mnist_reversed",
 )

@@ -485,7 +485,8 @@ def train(
     if pattern_legnth != labels_length:
         raise ValueError(
             "length of patterns doesn't match length of the labels",
-            pattern_legnth, labels_length,
+            pattern_legnth,
+            labels_length,
         )
     elif pattern_legnth == 0:
         LOGGER.info("Skipping empty dataset")

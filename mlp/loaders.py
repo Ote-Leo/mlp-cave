@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def _read_idx_images(path: str | Path) -> NDArray[np.float64]:
+def _read_idx_images(path: str | Path, flatten: bool = True) -> NDArray[np.float64]:
     """Read MNIST image file (idx3) into a normalized float64 NumPy array."""
     path = Path(path)
     opener = gzip.open if path.suffix == ".gz" else open
@@ -15,7 +15,10 @@ def _read_idx_images(path: str | Path) -> NDArray[np.float64]:
         if magic != 2051:
             raise ValueError(f"Invalid magic number {magic} in {path}")
         data = np.frombuffer(f.read(), dtype=np.uint8)
-        images = data.reshape(num, rows * cols).astype(np.float64) / 255.0
+        images = (
+            data.reshape(num, rows * cols) if flatten else data.reshape(num, rows, cols)
+        )
+        images = images.astype(np.float64) / 255.0
     return images
 
 
@@ -73,3 +76,39 @@ def load_mnist(
         labels = _one_hot(labels)
     labels = labels.astype(np.float64)
     return images, labels
+
+
+def load_mnist_reversed(
+    root: str | Path,
+    train: bool = True,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    root = Path(root)
+    prefix = "train" if train else "t10k"
+
+    img_path = next(root.glob(f"{prefix}-images.idx3-ubyte*"))
+    lbl_path = next(root.glob(f"{prefix}-labels.idx1-ubyte*"))
+
+    all_images = _read_idx_images(img_path, flatten=False)
+    labels = _read_idx_labels(lbl_path).astype(np.float64)
+
+    images = []
+
+    for i in range(10):
+        for j in range(len(labels)):
+            if i == labels[j]:
+                images.append(all_images[j])
+                break
+    assert len(images) == 10, len(images)
+
+    training_data = []
+    training_data_labels = []
+
+    for i, image in enumerate(images):
+        for j, row in enumerate(image):
+            for k, col in enumerate(row):
+                x = k / 28
+                y = j / 28
+                training_data.append([x, y, i])
+                training_data_labels.append([col])
+
+    return np.array(training_data), np.array(training_data_labels)
