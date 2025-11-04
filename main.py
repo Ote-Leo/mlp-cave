@@ -69,7 +69,8 @@ TRAIN_PARSER.add_argument(
     "-s",
     "--shape",
     nargs="+",
-    required=True, help="set neural network shape.",
+    required=True,
+    help="set neural network shape.",
 )
 TRAIN_PARSER.add_argument(
     "-l",
@@ -104,8 +105,7 @@ TEST_PARSER.add_argument(
 
 VISUALIZE_PARSER = MODEL_PARSER_GROUP.add_parser(
     "visualize",
-    help="Visualize the progression of an MLP training results."
-    ,
+    help="Visualize the progression of an MLP training results.",
 )
 VISUALIZE_PARSER.add_argument(
     "-i",
@@ -119,7 +119,7 @@ VISUALIZE_PARSER.add_argument(
     "--output",
     type=Path,
     required=False,
-    help=f"path to save figure visualization.",
+    help="path to save figure visualization.",
 )
 
 
@@ -188,15 +188,13 @@ def visualize(errors_file: Path, fig_path: Path | None = None):
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
 
-
-    ax.grid(True, linestyle='--', alpha=0.6)
-    ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
 
     if fig_path:
-        fig.savefig(fig_path, dpi=300, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=300, bbox_inches="tight")
 
     plt.show()
-
 
 
 def main(args: Sequence[str] | None = None) -> int:

@@ -28,7 +28,7 @@ For basic training by using the sigmoid function for every layers with a
 learning rate of $\eta = 0.1$
 
 ```console
-$ python main.py train --input datasets\basic\PA-A_training_data_06.txt -shape 6 16 16 2
+$ python main.py train --input datasets\basic\PA-A_training_data_06.txt --shape 6 16 16 2
 ```
 
 It will save the error progression on `learning_curve.txt`. To visualize the
