@@ -3,7 +3,48 @@
 A minimalistic Multi-Layer Perceptron (MLP) implementation. Check the
 [Implementation instructions](./instructions.md) for more details.
 
-## Usage Examples
+## CLI Usage
+
+Check the usage
+
+```console
+$ python main.py -h
+usage: main.py [-h] [-v] {train,test,visualize} ...
+
+A minimalistic utility for training, testing and visualizing Multi-Layer Perceptrons (MLPs).
+
+positional arguments:
+  {train,test,visualize}
+    train               Generate an MLP trained on the input data file.
+    test                Calculate the mean square error of a given MLP with respect to a given testing data.
+    visualize           Visualize the progression of an MLP training results.
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         print the current executable version
+```
+
+For basic training by using the sigmoid function for every layers with a
+learning rate of $\eta = 0.1$
+
+```console
+$ python main.py train --input datasets\basic\PA-A_training_data_06.txt -shape 6 16 16 2
+```
+
+It will save the error progression on `learning_curve.txt`. To visualize the
+progression use
+
+```console
+$ python main.py visualize -i learning_curve.txt
+```
+
+![learning progression](./assets/basic_learning_curve.png)
+
+for a more customize busage check the `mlp` module, and write a custom script.
+
+## API Usage
+
+Here are some training examples.
 
 ### XOr Gate
 
@@ -41,6 +82,8 @@ A minimalistic Multi-Layer Perceptron (MLP) implementation. Check the
 
 ### MNIST
 
+Here we traing a network to recognize a dataset of handwritten digits.
+
 ```python
 import mlp
 from mlp.loaders import load_mnist
@@ -59,6 +102,8 @@ network.dump("mnist.mlp")
 ```
 
 ### Reverse MNIST
+
+Here we traing a network to generate samples of handwritten digits.
 
 ![reverse-mnist](./assets/animation.gif)
 
