@@ -1,4 +1,5 @@
 import gzip
+import re
 import struct
 from pathlib import Path
 
@@ -112,3 +113,80 @@ def load_mnist_reversed(
                 training_data_labels.append([col])
 
     return np.array(training_data), np.array(training_data_labels)
+
+
+COMMENT_LINE_PATTERN = re.compile(r"^\s*#.*$")
+SHAPE_LINE_PATTERN = re.compile(
+    r"^\s*#\s*P\s*=\s*(\d+)\s*N\s*=\s*(\d+)\s*M\s*=\s*(\d+).*$"
+)
+DATA_LINE_PATTERN = re.compile(r"^\s*([^#].*?)\s*(?:#.*)?$")
+NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def parse_numbers_from_line(line: str) -> list[float]:
+    """Extract a list of floating point numbers from a data line."""
+    if not (match := DATA_LINE_PATTERN.match(line)):
+        return []
+    data_str = match.group(1)
+    return list(map(float, NUMBER_PATTERN.findall(data_str)))
+
+
+def load_basic_raw(path: str | Path) -> NDArray[np.float64]:
+    """Load raw numeric data from the file, igonoring comments and extracting
+    any numbers found.
+
+    Returns:
+        A NumPy aray of shape (P, N+M) where P is the number patterns.
+    """
+    data_lines = []
+
+    with open(path, "r") as file:
+        for line in filter(None, map(str.strip, file)):
+            if COMMENT_LINE_PATTERN.match(line):
+                continue
+            if not (numbers := parse_numbers_from_line(line)):
+                continue  # mostly likely unreachable
+            data_lines.append(numbers)
+
+    return np.array(data_lines, dtype=np.float64)
+
+
+def load_basic(path: str | Path) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Load structured data with shape comment and split into patterns and
+    labels.
+
+    Returns:
+        - patterns: shape (P, N)
+        - labels: shape (P, M)
+    """
+    patterns, labels = [], []
+    patterns_shape, labels_shape = None, None
+
+    with open(path, "r") as file:
+        for i, line in enumerate(file, start=1):
+            line = line.strip()
+            if not line:
+                continue
+
+            if COMMENT_LINE_PATTERN.match(line):
+                match = SHAPE_LINE_PATTERN.match(line)
+                if match and not (patterns_shape and labels_shape):
+                    _, patterns_shape, labels_shape = map(int, match.groups())
+                continue
+
+            if patterns_shape is None or labels_shape is None:
+                raise ValueError("Missing Shape Comment Line")
+
+            numbers = parse_numbers_from_line(line)
+            if len(numbers) != patterns_shape + labels_shape:
+                raise ValueError(
+                    f"Expected {patterns_shape + labels_shape} values per line, "
+                    f"got {len(numbers)} at line {i}: {line}"
+                )
+
+            patterns.append(numbers[:patterns_shape])
+            labels.append(numbers[patterns_shape:])
+
+    patterns = np.array(patterns, dtype=np.float64)
+    labels = np.array(labels, dtype=np.float64)
+    return patterns, labels

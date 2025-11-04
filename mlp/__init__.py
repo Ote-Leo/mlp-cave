@@ -1,4 +1,6 @@
 from .loaders import (
+    load_basic,
+    load_basic_raw,
     load_mnist,
     load_mnist_reversed,
 )
@@ -32,6 +34,8 @@ __all__ = (
     "random_array",
     "train",
     "train_batched",
+    "load_basic",
+    "load_basic_raw",
     "load_mnist",
     "load_mnist_reversed",
 )

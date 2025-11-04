@@ -468,6 +468,7 @@ def train(
     error_threshold: float = DEFAULT_ERROR_THRESHOLD,
     verbose: bool = True,
     report_every: int = 100,
+    error_file: io.TextIOWrapper | None = None,
 ):
     """Train a neural network over a batch of patterns.
 
@@ -479,6 +480,7 @@ def train(
         error_threshold: Early stopping threshold for loss.
         verbose: If True, log progress at regular intervals.
         report_every: Interval of steps at which progress is logged.
+        error_file: A file to write learning error progression.
     """
     import math
 
@@ -510,6 +512,9 @@ def train(
         network.train_pattern(pattern, label)
         err = loss(network, patterns, labels)
         count += 1
+        if error_file is not None:
+            print(err)
+            error_file.write(f"{err}\n")
 
 
 def train_batched(
